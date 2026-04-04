@@ -29,30 +29,33 @@ const io = new Server(server, {
 const rooms = {};
 const roomUsers = {};
 
+// ---------- Helpers ----------
+
 const generateRoomId = () => `room_${Math.random().toString(36).slice(2, 10)}`;
 const generateInviteCode = () =>
   Math.random().toString(36).slice(2, 8).toUpperCase();
 
-const getRoomUsers = (roomId) => roomUsers[roomId] || [];
-const getRoomMeta = (roomId) => rooms[roomId] || null;
+const safeTrim = (value) => (typeof value === "string" ? value.trim() : "");
+const safeUpper = (value) => safeTrim(value).toUpperCase();
 
-const findUserInRoom = (roomId, socketId) => {
+const getRoomMeta = (roomId) => rooms[roomId] || null;
+const getRoomUsers = (roomId) => roomUsers[roomId] || [];
+
+const findUserInRoomBySocket = (roomId, socketId) => {
   return getRoomUsers(roomId).find((user) => user.socketId === socketId);
+};
+
+const findUserInRoomByUsername = (roomId, username) => {
+  return getRoomUsers(roomId).find(
+    (user) => user.username.toLowerCase() === username.toLowerCase()
+  );
 };
 
 const findRoomByInviteCode = (inviteCode) => {
   if (!inviteCode) return null;
-  return Object.values(rooms).find(
-    (room) => room.inviteCode === inviteCode.trim().toUpperCase()
-  );
-};
 
-const findPublicRoomByName = (roomName) => {
-  if (!roomName) return null;
   return Object.values(rooms).find(
-    (room) =>
-      !room.isPrivate &&
-      room.roomName.trim().toLowerCase() === roomName.trim().toLowerCase()
+    (room) => room.inviteCode === safeUpper(inviteCode)
   );
 };
 
@@ -67,8 +70,7 @@ const emitRoomMeta = (roomId) => {
   io.to(roomId).emit("room_meta", {
     roomId: room.roomId,
     roomName: room.roomName,
-    inviteCode: room.isPrivate ? room.inviteCode : "",
-    isPrivate: room.isPrivate,
+    inviteCode: room.inviteCode,
     hostUsername: room.hostUsername,
   });
 };
@@ -77,8 +79,16 @@ const emitSystemMessage = (roomId, message) => {
   io.to(roomId).emit("receive_message", {
     type: "system",
     message,
-    time: new Date().toLocaleTimeString(),
+    time: new Date().toLocaleTimeString([],{
+      hour: "numeric",
+  minute: "2-digit",
+
+    }),
   });
+};
+
+const emitHostChanged = (roomId, hostUsername) => {
+  io.to(roomId).emit("host_changed", { hostUsername });
 };
 
 const createRoomState = ({
@@ -139,29 +149,51 @@ const updateRoomState = async (roomId, updates = {}) => {
 const emitRoomStateToRoom = async (roomId) => {
   const state = await getRoomState(roomId);
   if (!state) return;
-  io.to(roomId).emit("room_state", state);
+  io.to(roomId).emit("room_state", {
+    ...state,
+    sentAt: Date.now(), 
+  });
 };
 
 const emitRoomStateToOthers = async (roomId, socket) => {
   const state = await getRoomState(roomId);
   if (!state) return;
-  socket.to(roomId).emit("room_state", state);
+  socket.to(roomId).emit("room_state", {
+     ...state,
+    sentAt: Date.now(),
+  });
+};
+
+const isHostUser = (roomId, socketId) => {
+  const room = getRoomMeta(roomId);
+  const user = findUserInRoomBySocket(roomId, socketId);
+
+  if (!room || !user) return false;
+  return room.hostUsername === user.username;
 };
 
 const syncRoomHosts = async (roomId) => {
   const room = getRoomMeta(roomId);
   const users = getRoomUsers(roomId);
 
-  if (!room || !users.length) return;
+  if (!room) return;
+
+  if (!users.length) {
+    room.hostUsername = "";
+    await updateRoomState(roomId, { hostUsername: "" });
+    return;
+  }
 
   let hostUsername = room.hostUsername;
-
-  const hostStillExists = users.some((u) => u.username === hostUsername);
+  const hostStillExists = users.some((user) => user.username === hostUsername);
 
   if (!hostStillExists) {
     hostUsername = users[0].username;
     rooms[roomId].hostUsername = hostUsername;
     await updateRoomState(roomId, { hostUsername });
+
+    emitHostChanged(roomId, hostUsername);
+    emitSystemMessage(roomId, `${hostUsername} is now the host`);
   }
 
   roomUsers[roomId] = users.map((user) => ({
@@ -170,19 +202,30 @@ const syncRoomHosts = async (roomId) => {
   }));
 };
 
-const isHostUser = async (roomId, socketId) => {
-  const room = getRoomMeta(roomId);
-  const user = findUserInRoom(roomId, socketId);
+const cleanupRoomIfEmpty = async (roomId) => {
+  const users = getRoomUsers(roomId);
 
-  if (!room || !user) return false;
-  return room.hostUsername === user.username;
+  if (users.length > 0) return;
+
+  delete roomUsers[roomId];
+  delete rooms[roomId];
+
+  try {
+    await PlaybackState.deleteOne({ room: roomId });
+  } catch (error) {
+    console.log("cleanupRoomIfEmpty error:", error);
+  }
 };
 
 const leaveCurrentRoomIfAny = async (socket) => {
   const oldRoomId = socket.roomId;
   const oldUsername = socket.username;
 
-  if (!oldRoomId || !roomUsers[oldRoomId]) return;
+  if (!oldRoomId || !roomUsers[oldRoomId]) {
+    socket.roomId = null;
+    socket.username = null;
+    return;
+  }
 
   socket.leave(oldRoomId);
 
@@ -199,8 +242,7 @@ const leaveCurrentRoomIfAny = async (socket) => {
       emitSystemMessage(oldRoomId, `${oldUsername} left the room`);
     }
   } else {
-    delete roomUsers[oldRoomId];
-    delete rooms[oldRoomId];
+    await cleanupRoomIfEmpty(oldRoomId);
   }
 
   socket.roomId = null;
@@ -210,33 +252,36 @@ const leaveCurrentRoomIfAny = async (socket) => {
 const joinUserToRoom = async ({ socket, roomId, username }) => {
   await leaveCurrentRoomIfAny(socket);
 
+  const normalizedUsername = safeTrim(username);
+  if (!normalizedUsername) {
+    throw new Error("Username is required");
+  }
+
   socket.join(roomId);
   socket.roomId = roomId;
-  socket.username = username;
+  socket.username = normalizedUsername;
 
   if (!roomUsers[roomId]) {
     roomUsers[roomId] = [];
   }
 
-  const existingIndex = roomUsers[roomId].findIndex(
-    (user) => user.username === username
-  );
+  const existingUser = findUserInRoomByUsername(roomId, normalizedUsername);
 
-  if (existingIndex !== -1) {
-    roomUsers[roomId][existingIndex].socketId = socket.id;
-  } else {
-    roomUsers[roomId].push({
-      socketId: socket.id,
-      username,
-      isHost: false,
-    });
+  if (existingUser) {
+    throw new Error("Username already taken in this room");
   }
+
+  roomUsers[roomId].push({
+    socketId: socket.id,
+    username: normalizedUsername,
+    isHost: false,
+  });
 
   const existingState = await getRoomState(roomId);
 
   if (!existingState) {
     await replaceRoomState(roomId, {
-      hostUsername: rooms[roomId]?.hostUsername || username,
+      hostUsername: rooms[roomId]?.hostUsername || normalizedUsername,
       videoId: "",
       videoUrl: "",
       currentTime: 0,
@@ -252,32 +297,21 @@ const joinUserToRoom = async ({ socket, roomId, username }) => {
   socket.emit("room_state", latestState || {});
 };
 
+// ---------- Socket ----------
+
 io.on("connection", (socket) => {
   console.log("✅ User connected:", socket.id);
 
   socket.on("create_room", async (data) => {
-    console.log("📩 create_room received:", data);
-
     try {
-      const username = data?.username?.trim();
-      const roomName = data?.roomName?.trim();
-      const isPrivate = !!data?.isPrivate;
+      const username = safeTrim(data?.username);
+      const roomName = safeTrim(data?.roomName);
 
       if (!username || !roomName) {
         socket.emit("room_error", {
           message: "Username and room name are required",
         });
         return;
-      }
-
-      if (!isPrivate) {
-        const existingPublicRoom = findPublicRoomByName(roomName);
-        if (existingPublicRoom) {
-          socket.emit("room_error", {
-            message: "A public room with this name already exists",
-          });
-          return;
-        }
       }
 
       let roomId = generateRoomId();
@@ -294,7 +328,6 @@ io.on("connection", (socket) => {
         roomId,
         roomName,
         inviteCode,
-        isPrivate,
         hostUsername: username,
         createdAt: new Date(),
       };
@@ -315,13 +348,10 @@ io.on("connection", (socket) => {
         username,
       });
 
-      console.log("✅ room created successfully:", roomId);
-
       socket.emit("room_created", {
         roomId,
         roomName,
-        inviteCode: isPrivate ? inviteCode : "",
-        isPrivate,
+        inviteCode,
         hostUsername: username,
       });
 
@@ -329,19 +359,16 @@ io.on("connection", (socket) => {
     } catch (error) {
       console.log("❌ create_room error:", error);
       socket.emit("room_error", {
-        message: "Failed to create room",
+        message: error.message || "Failed to create room",
       });
     }
   });
 
   socket.on("join_room", async (data) => {
-    console.log("📩 join_room received:", data);
-
     try {
-      const username = data?.username?.trim();
-      const roomIdInput = data?.roomId?.trim();
-      const inviteCodeInput = data?.inviteCode?.trim()?.toUpperCase();
-      const roomNameInput = data?.roomName?.trim();
+      const username = safeTrim(data?.username);
+      const roomIdInput = safeTrim(data?.roomId);
+      const inviteCodeInput = safeUpper(data?.inviteCode);
 
       if (!username) {
         socket.emit("room_error", {
@@ -352,35 +379,15 @@ io.on("connection", (socket) => {
 
       let room = null;
 
-      if (roomIdInput && rooms[roomIdInput]) {
-        room = rooms[roomIdInput];
-      } else if (inviteCodeInput) {
+      if (inviteCodeInput) {
         room = findRoomByInviteCode(inviteCodeInput);
-      } else if (roomNameInput) {
-        room = findPublicRoomByName(roomNameInput);
+      } else if (roomIdInput && rooms[roomIdInput]) {
+        room = rooms[roomIdInput];
       }
 
       if (!room) {
         socket.emit("room_error", {
           message: "Room not found",
-        });
-        return;
-      }
-
-      if (room.isPrivate && !inviteCodeInput && !roomIdInput) {
-        socket.emit("room_error", {
-          message: "Invite code is required for private room",
-        });
-        return;
-      }
-
-      if (
-        room.isPrivate &&
-        inviteCodeInput &&
-        room.inviteCode !== inviteCodeInput
-      ) {
-        socket.emit("room_error", {
-          message: "Invalid invite code",
         });
         return;
       }
@@ -394,29 +401,76 @@ io.on("connection", (socket) => {
       socket.emit("room_joined", {
         roomId: room.roomId,
         roomName: room.roomName,
-        inviteCode: room.isPrivate ? room.inviteCode : "",
-        isPrivate: room.isPrivate,
+        inviteCode: room.inviteCode,
         hostUsername: room.hostUsername,
       });
 
-      emitSystemMessage(room.roomId, `${username} joined the room}`);
+      emitSystemMessage(room.roomId, `${username} joined the room`);
     } catch (error) {
       console.log("❌ join_room error:", error);
       socket.emit("room_error", {
-        message: "Failed to join room",
+        message: error.message || "Failed to join room",
+      });
+    }
+  });
+
+  socket.on("transfer_host", async (data) => {
+    try {
+      const roomId = safeTrim(data?.roomId);
+      const targetUsername = safeTrim(data?.targetUsername);
+
+      if (!roomId || !targetUsername) {
+        socket.emit("room_error", { message: "Invalid host transfer request" });
+        return;
+      }
+
+      if (!isHostUser(roomId, socket.id)) {
+        socket.emit("room_error", { message: "Only host can transfer host" });
+        return;
+      }
+
+      const room = getRoomMeta(roomId);
+      if (!room) {
+        socket.emit("room_error", { message: "Room not found" });
+        return;
+      }
+
+      const targetUser = findUserInRoomByUsername(roomId, targetUsername);
+      if (!targetUser) {
+        socket.emit("room_error", { message: "Selected user not found in room" });
+        return;
+      }
+
+      if (room.hostUsername === targetUser.username) {
+        socket.emit("room_error", { message: "This user is already the host" });
+        return;
+      }
+
+      rooms[roomId].hostUsername = targetUser.username;
+      await updateRoomState(roomId, { hostUsername: targetUser.username });
+      await syncRoomHosts(roomId);
+
+      emitRoomUsers(roomId);
+      emitRoomMeta(roomId);
+      emitHostChanged(roomId, targetUser.username);
+      emitSystemMessage(roomId, `${targetUser.username} is now the host`);
+    } catch (error) {
+      console.log("transfer_host error:", error);
+      socket.emit("room_error", {
+        message: error.message || "Failed to transfer host",
       });
     }
   });
 
   socket.on("load_video", async (data) => {
     try {
-      const roomId = data?.roomId?.trim();
-      const videoId = data?.videoId?.trim();
-      const videoUrl = data?.videoUrl?.trim();
-      const by = data?.by?.trim();
+      const roomId = safeTrim(data?.roomId);
+      const videoId = safeTrim(data?.videoId);
+      const videoUrl = safeTrim(data?.videoUrl);
+      const by = safeTrim(data?.by);
 
       if (!roomId || !videoId || !videoUrl) return;
-      if (!(await isHostUser(roomId, socket.id))) return;
+      if (!isHostUser(roomId, socket.id)) return;
 
       const room = getRoomMeta(roomId);
       if (!room) return;
@@ -438,9 +492,9 @@ io.on("connection", (socket) => {
 
   socket.on("play_video", async ({ roomId, currentTime = 0 }) => {
     try {
-      const safeRoomId = roomId?.trim();
+      const safeRoomId = safeTrim(roomId);
       if (!safeRoomId) return;
-      if (!(await isHostUser(safeRoomId, socket.id))) return;
+      if (!isHostUser(safeRoomId, socket.id)) return;
 
       await updateRoomState(safeRoomId, {
         currentTime,
@@ -455,9 +509,9 @@ io.on("connection", (socket) => {
 
   socket.on("pause_video", async ({ roomId, currentTime = 0 }) => {
     try {
-      const safeRoomId = roomId?.trim();
+      const safeRoomId = safeTrim(roomId);
       if (!safeRoomId) return;
-      if (!(await isHostUser(safeRoomId, socket.id))) return;
+      if (!isHostUser(safeRoomId, socket.id)) return;
 
       await updateRoomState(safeRoomId, {
         currentTime,
@@ -472,9 +526,9 @@ io.on("connection", (socket) => {
 
   socket.on("seek_video", async ({ roomId, currentTime = 0 }) => {
     try {
-      const safeRoomId = roomId?.trim();
+      const safeRoomId = safeTrim(roomId);
       if (!safeRoomId) return;
-      if (!(await isHostUser(safeRoomId, socket.id))) return;
+      if (!isHostUser(safeRoomId, socket.id)) return;
 
       await updateRoomState(safeRoomId, {
         currentTime,
@@ -488,9 +542,9 @@ io.on("connection", (socket) => {
 
   socket.on("sync_progress", async ({ roomId, currentTime = 0, isPlaying = false }) => {
     try {
-      const safeRoomId = roomId?.trim();
+      const safeRoomId = safeTrim(roomId);
       if (!safeRoomId) return;
-      if (!(await isHostUser(safeRoomId, socket.id))) return;
+      if (!isHostUser(safeRoomId, socket.id)) return;
 
       await updateRoomState(safeRoomId, {
         currentTime,
@@ -505,16 +559,21 @@ io.on("connection", (socket) => {
 
   socket.on("send_message", (data) => {
     try {
-      const roomId = data?.roomId?.trim();
-      const message = data?.message?.trim();
-      const author = data?.author?.trim();
+      const roomId = safeTrim(data?.roomId);
+      const message = safeTrim(data?.message);
 
-      if (!roomId || !message || !author) return;
+      if (!roomId || !message) return;
+
+      const room = getRoomMeta(roomId);
+      if (!room) return;
+
+      const user = findUserInRoomBySocket(roomId, socket.id);
+      if (!user) return;
 
       io.to(roomId).emit("receive_message", {
         type: "user",
         roomId,
-        author,
+        author: user.username,
         message,
         time: new Date().toLocaleTimeString(),
       });
@@ -530,6 +589,52 @@ io.on("connection", (socket) => {
       console.log("leave_room error:", error);
     }
   });
+  socket.on("kick_user", async (data) => {
+  try {
+    const roomId = safeTrim(data?.roomId);
+    const targetUsername = safeTrim(data?.targetUsername);
+
+    if (!roomId || !targetUsername) {
+      socket.emit("room_error", { message: "Invalid kick request" });
+      return;
+    }
+
+    if (!isHostUser(roomId, socket.id)) {
+      socket.emit("room_error", { message: "Only host can kick users" });
+      return;
+    }
+
+    const room = getRoomMeta(roomId);
+    if (!room) {
+      socket.emit("room_error", { message: "Room not found" });
+      return;
+    }
+
+    const targetUser = findUserInRoomByUsername(roomId, targetUsername);
+    if (!targetUser) {
+      socket.emit("room_error", { message: "Selected user not found in room" });
+      return;
+    }
+
+    if (targetUser.username === room.hostUsername) {
+      socket.emit("room_error", { message: "Host cannot be kicked" });
+      return;
+    }
+
+    const targetSocket = io.sockets.sockets.get(targetUser.socketId);
+    if (targetSocket) {
+      targetSocket.emit("kicked_from_room", { username: targetUser.username });
+      await leaveCurrentRoomIfAny(targetSocket);
+    }
+
+    emitSystemMessage(roomId, `${targetUser.username} was removed from the room`);
+  } catch (error) {
+    console.log("kick_user error:", error);
+    socket.emit("room_error", {
+      message: error.message || "Failed to kick user",
+    });
+  }
+});
 
   socket.on("disconnect", async () => {
     try {
@@ -540,6 +645,8 @@ io.on("connection", (socket) => {
     }
   });
 });
+
+
 
 const PORT = process.env.PORT || 5000;
 

@@ -34,6 +34,7 @@ function App() {
   const [openUserMenu, setOpenUserMenu] = useState(null);
   const [floatingMenuPosition, setFloatingMenuPosition] = useState({ top: 0, left: 0 });
   const [floatingMenuUser, setFloatingMenuUser] = useState(null);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
 
   const playerRef = useRef(null);
   const videoWrapperRef = useRef(null);
@@ -45,7 +46,6 @@ function App() {
   const latestRoomStateRef = useRef(null);
   const toastTimeoutRef = useRef(null);
   const isLocallyPausedRef = useRef(false);
-  const [showLeaveModal, setShowLeaveModal] = useState(false);
 
   useEffect(() => {
     isLocallyPausedRef.current = isLocallyPaused;
@@ -110,6 +110,14 @@ function App() {
     setFloatingMenuUser(null);
   };
 
+  const openLeaveModal = () => {
+    setShowLeaveModal(true);
+  };
+
+  const closeLeaveModal = () => {
+    setShowLeaveModal(false);
+  };
+
   const toggleFullscreen = async () => {
     const el = videoWrapperRef.current;
     if (!el) return;
@@ -154,6 +162,37 @@ function App() {
     latestRoomStateRef.current = null;
     setPlayerInstanceKey(0);
   };
+
+  const confirmLeaveRoom = async () => {
+  try {
+    const fullscreenElement =
+      document.fullscreenElement || document.webkitFullscreenElement || null;
+
+    if (fullscreenElement) {
+      if (document.exitFullscreen) {
+        await document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        await document.webkitExitFullscreen();
+      }
+    }
+  } catch (error) {
+    console.log("Exit fullscreen error:", error);
+  }
+
+  if (socket.connected && roomId) {
+    socket.emit("leave_room");
+  }
+
+  closeLeaveModal();
+  resetRoomState();
+  setJoined(false);
+  setMode("");
+  setRoomName("");
+  setRoomId("");
+  setInviteCode("");
+
+  showToast("You left the room", "info");
+};
 
   const openFloatingUserMenu = (event, menuKey, user) => {
     event.stopPropagation();
@@ -501,6 +540,7 @@ function App() {
     const closeMenuOnEscape = (e) => {
       if (e.key === "Escape") {
         closeUserMenu();
+        setShowLeaveModal(false);
       }
     };
 
@@ -759,6 +799,16 @@ function App() {
         </div>
       ) : (
         <div className="room-layout">
+          <button
+            type="button"
+            className="leave-btn"
+            onClick={openLeaveModal}
+            title="Leave room"
+            aria-label="Leave room"
+          >
+          ⏻
+          </button>
+
           <aside className="left-sidebar panel">
             <div className="sidebar-top">
               <p className="sidebar-label">Room :</p>
@@ -1060,6 +1110,32 @@ function App() {
               </div>
             </div>
           </aside>
+
+          {showLeaveModal && (
+            <div className="modal-overlay" onClick={closeLeaveModal}>
+              <div className="leave-modal" onClick={(e) => e.stopPropagation()}>
+                <h3>Leave room?</h3>
+                <p>You will be disconnected from this watch session.</p>
+
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="modal-btn modal-btn-secondary"
+                    onClick={closeLeaveModal}
+                  >
+                    No
+                  </button>
+                  <button
+                    type="button"
+                    className="modal-btn modal-btn-danger"
+                    onClick={confirmLeaveRoom}
+                  >
+                    Yes
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

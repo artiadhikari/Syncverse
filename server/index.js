@@ -293,8 +293,8 @@ const joinUserToRoom = async ({ socket, roomId, username }) => {
   emitRoomUsers(roomId);
   emitRoomMeta(roomId);
 
-  const latestState = await getRoomState(roomId);
-  socket.emit("room_state", latestState || {});
+const latestState = await getRoomState(roomId);
+socket.emit("room_state", latestState ? { ...latestState, sentAt: Date.now() } : {});
 };
 
 // ---------- Socket ----------
@@ -484,6 +484,9 @@ io.on("connection", (socket) => {
       });
 
       await emitRoomStateToRoom(roomId);
+      setTimeout(async () => {
+  await emitRoomStateToRoom(roomId);
+}, 1200);
       emitSystemMessage(roomId, `${by || "Host"} loaded a new video`);
     } catch (error) {
       console.log("load_video error:", error);

@@ -28,12 +28,15 @@ function App() {
   const [isVideoLoading, setIsVideoLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [isLocallyPaused, setIsLocallyPaused] = useState(false);
+  const [playerInstanceKey, setPlayerInstanceKey] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const [openUserMenu, setOpenUserMenu] = useState(null);
   const [floatingMenuPosition, setFloatingMenuPosition] = useState({ top: 0, left: 0 });
   const [floatingMenuUser, setFloatingMenuUser] = useState(null);
 
   const playerRef = useRef(null);
+  const videoWrapperRef = useRef(null);
   const messagesEndRef = useRef(null);
   const isRemoteActionRef = useRef(false);
   const isPlayerReadyRef = useRef(false);
@@ -42,10 +45,29 @@ function App() {
   const latestRoomStateRef = useRef(null);
   const toastTimeoutRef = useRef(null);
   const isLocallyPausedRef = useRef(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
 
   useEffect(() => {
     isLocallyPausedRef.current = isLocallyPaused;
   }, [isLocallyPaused]);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const currentWrapper = videoWrapperRef.current;
+      const fullscreenElement =
+        document.fullscreenElement || document.webkitFullscreenElement || null;
+
+      setIsFullscreen(!!currentWrapper && fullscreenElement === currentWrapper);
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
+    };
+  }, []);
 
   const isCurrentUserHost = useMemo(() => {
     return users.find((u) => u.username === username)?.isHost || false;
@@ -88,6 +110,32 @@ function App() {
     setFloatingMenuUser(null);
   };
 
+  const toggleFullscreen = async () => {
+    const el = videoWrapperRef.current;
+    if (!el) return;
+
+    try {
+      const fullscreenElement =
+        document.fullscreenElement || document.webkitFullscreenElement || null;
+
+      if (!fullscreenElement) {
+        if (el.requestFullscreen) {
+          await el.requestFullscreen();
+        } else if (el.webkitRequestFullscreen) {
+          await el.webkitRequestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          await document.webkitExitFullscreen();
+        }
+      }
+    } catch (error) {
+      console.log("Fullscreen error:", error);
+    }
+  };
+
   const resetRoomState = () => {
     setChat([]);
     setUsers([]);
@@ -97,12 +145,14 @@ function App() {
     setIsVideoLoading(false);
     setVideoStatusText("Waiting for a video...");
     setIsLocallyPaused(false);
+    setIsFullscreen(false);
     isLocallyPausedRef.current = false;
     closeUserMenu();
     playerRef.current = null;
     isPlayerReadyRef.current = false;
     pendingRoomStateRef.current = null;
     latestRoomStateRef.current = null;
+    setPlayerInstanceKey(0);
   };
 
   const openFloatingUserMenu = (event, menuKey, user) => {
@@ -242,6 +292,8 @@ function App() {
     setIsLocallyPaused(false);
     isLocallyPausedRef.current = false;
 
+    const isSameVideo = extractedId === videoId;
+
     socket.emit("load_video", {
       roomId,
       videoId: extractedId,
@@ -250,7 +302,13 @@ function App() {
     });
 
     setIsVideoLoading(true);
-    setVideoId(extractedId);
+
+    if (isSameVideo) {
+      setPlayerInstanceKey((prev) => prev + 1);
+    } else {
+      setVideoId(extractedId);
+    }
+
     setVideoUrl("");
   };
 
@@ -293,7 +351,9 @@ function App() {
 
       isRemoteActionRef.current = true;
 
-      if (diff > 0.4 || forceSync) {
+      if (forceSync || diff > 1.2) {
+        playerRef.current.seekTo?.(targetTime, true);
+      } else if (diff > 0.35) {
         playerRef.current.seekTo?.(targetTime, true);
       }
 
@@ -304,17 +364,17 @@ function App() {
           const after = playerRef.current?.getCurrentTime?.() || 0;
           const diffAfter = Math.abs(after - targetTime);
 
-          if (diffAfter > 0.5) {
+          if (diffAfter > 0.6) {
             playerRef.current?.seekTo?.(targetTime, true);
           }
-        }, 300);
+        }, 450);
       } else {
         playerRef.current.pauseVideo?.();
       }
 
       setTimeout(() => {
         isRemoteActionRef.current = false;
-      }, 600);
+      }, 700);
     } catch (error) {
       console.log("applyRoomState error:", error);
     }
@@ -391,7 +451,9 @@ function App() {
     if (!isCurrentUserHost) {
       if (event?.data === 3) {
         const state = latestRoomStateRef.current;
-        if (state) applyRoomState(state);
+        if (state) {
+          applyRoomState(state, { forceSync: true });
+        }
       }
       return;
     }
@@ -426,7 +488,7 @@ function App() {
         currentTime,
         isPlaying,
       });
-    }, 4000);
+    }, 2000);
 
     return () => clearInterval(syncInterval);
   }, [joined, isCurrentUserHost, videoId, roomId]);
@@ -486,10 +548,16 @@ function App() {
 
       latestRoomStateRef.current = state;
 
-      if (state.videoId !== videoId) {
+      const isNewVideo = state.videoId !== videoId;
+
+      if (isNewVideo) {
         setVideoId(state.videoId);
+        setIsVideoLoading(true);
         setIsLocallyPaused(false);
         isLocallyPausedRef.current = false;
+
+        pendingRoomStateRef.current = { ...state, __forceSync: true };
+        return;
       }
 
       applyRoomState(state);
@@ -843,10 +911,54 @@ function App() {
                 )}
 
                 {videoId ? (
-                  <div className="video-player-wrapper">
+                  <div className="video-player-wrapper" ref={videoWrapperRef}>
+                    {!isCurrentUserHost && (
+                      <button
+                        type="button"
+                        className="custom-fullscreen-btn"
+                        onClick={toggleFullscreen}
+                        title={isFullscreen ? "Exit full screen" : "Full screen"}
+                        aria-label={isFullscreen ? "Exit full screen" : "Full screen"}
+                      >
+                        {isFullscreen ? (
+                          <svg
+                            viewBox="0 0 24 24"
+                            width="18"
+                            height="18"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M9 4H5v4M15 4h4v4M9 20H5v-4M15 20h4v-4"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        ) : (
+                          <svg
+                            viewBox="0 0 24 24"
+                            width="18"
+                            height="18"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        )}
+                      </button>
+                    )}
+
                     <div className="video-player">
                       <YouTube
-                        key={videoId}
+                        key={`${videoId}-${playerInstanceKey}`}
                         videoId={videoId}
                         onReady={onPlayerReady}
                         onPlay={onPlay}

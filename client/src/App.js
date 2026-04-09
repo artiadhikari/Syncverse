@@ -164,35 +164,35 @@ function App() {
   };
 
   const confirmLeaveRoom = async () => {
-  try {
-    const fullscreenElement =
-      document.fullscreenElement || document.webkitFullscreenElement || null;
+    try {
+      const fullscreenElement =
+        document.fullscreenElement || document.webkitFullscreenElement || null;
 
-    if (fullscreenElement) {
-      if (document.exitFullscreen) {
-        await document.exitFullscreen();
-      } else if (document.webkitExitFullscreen) {
-        await document.webkitExitFullscreen();
+      if (fullscreenElement) {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          await document.webkitExitFullscreen();
+        }
       }
+    } catch (error) {
+      console.log("Exit fullscreen error:", error);
     }
-  } catch (error) {
-    console.log("Exit fullscreen error:", error);
-  }
 
-  if (socket.connected && roomId) {
-    socket.emit("leave_room");
-  }
+    if (socket.connected && roomId) {
+      socket.emit("leave_room");
+    }
 
-  closeLeaveModal();
-  resetRoomState();
-  setJoined(false);
-  setMode("");
-  setRoomName("");
-  setRoomId("");
-  setInviteCode("");
+    closeLeaveModal();
+    resetRoomState();
+    setJoined(false);
+    setMode("");
+    setRoomName("");
+    setRoomId("");
+    setInviteCode("");
 
-  showToast("You left the room", "info");
-};
+    showToast("You left the room", "info");
+  };
 
   const openFloatingUserMenu = (event, menuKey, user) => {
     event.stopPropagation();
@@ -376,23 +376,21 @@ function App() {
     try {
       const now = Date.now();
       const networkDelay = state.sentAt ? (now - state.sentAt) / 1000 : 0;
+      const cappedDelay = Math.min(networkDelay, 0.7);
       const baseTime = Number(state.currentTime) || 0;
-      const targetTime = state.isPlaying ? baseTime + networkDelay : baseTime;
+      const targetTime = state.isPlaying ? baseTime + cappedDelay : baseTime;
 
-      const shouldPlay = forceSync
-        ? !!state.isPlaying
-        : isLocallyPausedRef.current
-        ? false
-        : !!state.isPlaying;
+      let shouldPlay = !!state.isPlaying;
+      if (!forceSync && isLocallyPausedRef.current) {
+        shouldPlay = false;
+      }
 
       const current = playerRef.current.getCurrentTime?.() || 0;
       const diff = Math.abs(current - targetTime);
 
       isRemoteActionRef.current = true;
 
-      if (forceSync || diff > 1.2) {
-        playerRef.current.seekTo?.(targetTime, true);
-      } else if (diff > 0.35) {
+      if (forceSync || diff > 1.5) {
         playerRef.current.seekTo?.(targetTime, true);
       }
 
@@ -403,10 +401,10 @@ function App() {
           const after = playerRef.current?.getCurrentTime?.() || 0;
           const diffAfter = Math.abs(after - targetTime);
 
-          if (diffAfter > 0.6) {
+          if (diffAfter > 0.9) {
             playerRef.current?.seekTo?.(targetTime, true);
           }
-        }, 450);
+        }, 700);
       } else {
         playerRef.current.pauseVideo?.();
       }
@@ -514,7 +512,7 @@ function App() {
       if (!videoId) return;
 
       const now = Date.now();
-      if (now - lastSyncSentAtRef.current < 2000) return;
+      if (now - lastSyncSentAtRef.current < 4000) return;
 
       lastSyncSentAtRef.current = now;
 
@@ -527,7 +525,7 @@ function App() {
         currentTime,
         isPlaying,
       });
-    }, 2000);
+    }, 4000);
 
     return () => clearInterval(syncInterval);
   }, [joined, isCurrentUserHost, videoId, roomId]);
@@ -690,7 +688,7 @@ function App() {
       socket.off("kicked_from_room", handleKicked);
       socket.off("room_error", handleRoomError);
     };
-  }, [isCurrentUserHost, videoId, username]);
+  }, [videoId, username, isCurrentUserHost]);
 
   useEffect(() => {
     return () => {
@@ -806,7 +804,7 @@ function App() {
             title="Leave room"
             aria-label="Leave room"
           >
-          ⏻
+            ⏻
           </button>
 
           <aside className="left-sidebar panel">

@@ -1316,3 +1316,137 @@ button:disabled {
     min-width: 0;
   }
 }
+/* 🔴 Leave Button (Match Load/Sync/Pause Buttons) */
+.leave-btn {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 20;
+
+  width: 46px;
+  height: 46px;
+
+  border-radius: 50%;
+  border: none;
+
+  background: linear-gradient(135deg, #ff4d4d, #d93636);
+  color: #fff;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 18px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  box-shadow:
+    0 10px 24px rgba(255, 70, 70, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+
+  transition: all 0.22s ease;
+}
+
+.leave-btn:hover {
+  transform: translateY(-2px) scale(1.05);
+
+  box-shadow:
+    0 14px 28px rgba(255, 70, 70, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.leave-btn:active {
+  transform: translateY(0) scale(0.96);
+
+  box-shadow:
+    0 6px 14px rgba(255, 70, 70, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Modal Overlay */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+
+  background: rgba(5, 5, 5, 0.75);
+  backdrop-filter: blur(6px);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Modal Box */
+.leave-modal {
+  width: 100%;
+  max-width: 360px;
+
+  padding: 22px;
+
+  border-radius: 18px;
+
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 255, 255, 0.035)
+  );
+
+  border: 1px solid rgba(255, 255, 255, 0.08);
+
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
+  text-align: center;
+}
+
+.leave-modal h3 {
+  margin-bottom: 8px;
+  font-size: 18px;
+}
+
+.leave-modal p {
+  font-size: 13px;
+  color: #a7a7a7;
+  margin-bottom: 18px;
+}
+
+/* Modal Buttons */
+.modal-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.modal-btn {
+  flex: 1;
+  padding: 10px 12px;
+
+  border-radius: 12px;
+  border: none;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.modal-btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ddd;
+}
+
+.modal-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.modal-btn-danger {
+  background: linear-gradient(135deg, #ff4d4d, #d93636);
+  color: #fff;
+}
+
+.modal-btn-danger:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(255, 70, 70, 0.25);
+}

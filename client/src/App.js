@@ -109,6 +109,60 @@ function App() {
     setOpenUserMenu(null);
     setFloatingMenuUser(null);
   };
+  const openLeaveModal = () => {
+  setShowLeaveModal(true);
+};
+
+const closeLeaveModal = () => {
+  setShowLeaveModal(false);
+};
+
+const confirmLeaveRoom = async () => {
+  try {
+    const fullscreenElement =
+      document.fullscreenElement || document.webkitFullscreenElement || null;
+
+    if (fullscreenElement) {
+      if (document.exitFullscreen) {
+        await document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        await document.webkitExitFullscreen();
+      }
+    }
+  } catch (error) {
+    console.log("Exit fullscreen error:", error);
+  }
+
+  // 🔥 STOP SYNC FIRST
+  isRemoteActionRef.current = true;
+  isPlayerReadyRef.current = false;
+  pendingRoomStateRef.current = null;
+  latestRoomStateRef.current = null;
+
+  // 🔥 STOP PLAYER
+  if (playerRef.current) {
+    try {
+      playerRef.current.pauseVideo?.();
+    } catch {}
+  }
+  playerRef.current = null;
+
+  // 🔥 LEAVE ROOM
+  if (socket.connected && roomId) {
+    socket.emit("leave_room");
+  }
+
+  // 🔥 RESET UI
+  resetRoomState();
+  setJoined(false);
+  setMode("");
+  setRoomName("");
+  setRoomId("");
+  setInviteCode("");
+  setShowLeaveModal(false);
+
+  showToast("You left the room", "info");
+};
 
   const toggleFullscreen = async () => {
     const el = videoWrapperRef.current;
@@ -499,9 +553,10 @@ function App() {
     };
 
     const closeMenuOnEscape = (e) => {
-      if (e.key === "Escape") {
-        closeUserMenu();
-      }
+    if (e.key === "Escape") {
+  closeUserMenu();
+  closeLeaveModal();
+}
     };
 
     window.addEventListener("click", closeMenuOnOutsideClick);
@@ -759,6 +814,14 @@ function App() {
         </div>
       ) : (
         <div className="room-layout">
+          <button
+  type="button"
+  className="leave-btn"
+  onClick={openLeaveModal}
+  title="Leave room"
+>
+  ⏻
+</button>
           <aside className="left-sidebar panel">
             <div className="sidebar-top">
               <p className="sidebar-label">Room :</p>
@@ -1060,6 +1123,31 @@ function App() {
               </div>
             </div>
           </aside>
+          {showLeaveModal &&
+  createPortal(
+    <div className="modal-overlay" onClick={closeLeaveModal}>
+      <div className="leave-modal" onClick={(e) => e.stopPropagation()}>
+        <h3>Leave room?</h3>
+        <p>You will exit this watch session.</p>
+
+        <div className="modal-actions">
+          <button
+            className="modal-btn modal-btn-secondary"
+            onClick={closeLeaveModal}
+          >
+            Cancel
+          </button>
+          <button
+            className="modal-btn modal-btn-danger"
+            onClick={confirmLeaveRoom}
+          >
+            Leave
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  )}
         </div>
       )}
     </div>

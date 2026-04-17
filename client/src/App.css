@@ -50,7 +50,7 @@ button:disabled {
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(circle at top left, rgba(255, 60, 60, 0.05), transparent 28%),
+    radial-gradient(circle at top left, rgba(255, 60, 60, 0.08), transparent 30%),
     radial-gradient(circle at bottom right, rgba(255, 255, 255, 0.03), transparent 25%),
     linear-gradient(135deg, #050505, #0d0d0d, #111111);
 }
@@ -140,7 +140,7 @@ button:disabled {
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow:
     0 14px 36px rgba(0, 0, 0, 0.34),
-    0 0 16px rgba(255, 70, 70, 0.035);
+    0 0 24px rgba(255, 70, 70, 0.05);
   border-radius: 22px;
 }
 
@@ -336,151 +336,6 @@ button:disabled {
   padding: 16px;
 }
 
-/* leave button */
-.leave-btn {
-  position: absolute;
-  top: 18px;
-  right: 18px;
-  z-index: 40;
-  width: 42px;
-  height: 42px;
-  padding: 0;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 77, 77, 0.34);
-  background: linear-gradient(135deg, #ff4d4d, #d93636);
-  color: #fff;
-  font-size: 16px;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  box-shadow:
-    0 8px 20px rgba(255, 70, 70, 0.24),
-    0 0 12px rgba(255, 70, 70, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.14);
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    filter 0.2s ease;
-}
-
-.leave-btn:hover {
-  transform: scale(1.08);
-  filter: brightness(1.08);
-  box-shadow:
-    0 12px 26px rgba(255, 70, 70, 0.32),
-    0 0 18px rgba(255, 70, 70, 0.26),
-    0 0 0 3px rgba(255, 77, 77, 0.1);
-}
-
-.leave-btn:active {
-  transform: scale(0.95);
-}
-
-/* leave modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 10000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  background: rgba(4, 4, 4, 0.62);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  animation: fadeOverlay 0.18s ease;
-}
-
-.leave-modal {
-  width: 100%;
-  max-width: 360px;
-  padding: 24px 22px 20px;
-  border-radius: 24px;
-  background: linear-gradient(
-    180deg,
-    rgba(26, 26, 26, 0.96),
-    rgba(14, 14, 14, 0.96)
-  );
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow:
-    0 24px 60px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  color: #f5f5f5;
-  animation: modalPop 0.2s ease;
-}
-
-.leave-modal h3 {
-  font-size: 22px;
-  font-weight: 750;
-  margin-bottom: 8px;
-  letter-spacing: 0.2px;
-}
-
-.leave-modal p {
-  font-size: 14px;
-  line-height: 1.55;
-  color: #a9a9a9;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 20px;
-}
-
-.modal-btn {
-  flex: 1;
-  height: 44px;
-  border-radius: 14px;
-  border: none;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    background 0.2s ease,
-    border-color 0.2s ease,
-    color 0.2s ease;
-}
-
-.modal-btn:hover {
-  transform: translateY(-1px);
-}
-
-.modal-btn:active {
-  transform: translateY(0);
-}
-
-.modal-btn-secondary {
-  background: rgba(255, 255, 255, 0.05);
-  color: #f2f2f2;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
-
-.modal-btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.modal-btn-danger {
-  background: linear-gradient(135deg, #ff4d4d, #d93636);
-  color: #fff;
-  box-shadow:
-    0 10px 22px rgba(255, 70, 70, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
-}
-
-.modal-btn-danger:hover {
-  box-shadow:
-    0 14px 26px rgba(255, 70, 70, 0.24),
-    inset 0 1px 0 rgba(255, 255, 255, 0.14);
-}
-
 .left-sidebar,
 .center-panel,
 .right-sidebar {
@@ -500,7 +355,7 @@ button:disabled {
   padding: 16px;
   border-radius: 20px;
   background:
-    radial-gradient(circle at top right, rgba(255, 77, 77, 0.04), transparent 34%),
+    radial-gradient(circle at top right, rgba(255, 77, 77, 0.07), transparent 35%),
     linear-gradient(
       180deg,
       rgba(255, 255, 255, 0.055),
@@ -509,7 +364,6 @@ button:disabled {
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow:
     0 6px 16px rgba(0, 0, 0, 0.18),
-    0 0 14px rgba(255, 77, 77, 0.045),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
@@ -1354,26 +1208,6 @@ button:disabled {
   }
 }
 
-@keyframes fadeOverlay {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes modalPop {
-  from {
-    opacity: 0;
-    transform: translateY(10px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
 /* responsive */
 @media (max-width: 1200px) {
   .room-layout {
@@ -1411,7 +1245,6 @@ button:disabled {
   .room-layout {
     grid-template-columns: 1fr;
     height: auto;
-    padding-top: 74px;
   }
 
   .left-sidebar,
@@ -1456,16 +1289,14 @@ button:disabled {
 
   .entry-actions,
   .invite-row,
-  .viewer-sync-top,
-  .modal-actions {
+  .viewer-sync-top {
     flex-direction: column;
     align-items: stretch;
   }
 
   .copy-button,
   .entry-actions .theme-button,
-  .entry-actions,
-  .modal-btn {
+  .entry-actions {
     width: 100%;
   }
 
@@ -1475,13 +1306,6 @@ button:disabled {
 
   .viewer-sync-inputlike {
     width: 100%;
-  }
-
-  .leave-btn {
-    top: 14px;
-    right: 14px;
-    width: 40px;
-    height: 40px;
   }
 
   .toast {

@@ -34,7 +34,6 @@ function App() {
   const [openUserMenu, setOpenUserMenu] = useState(null);
   const [floatingMenuPosition, setFloatingMenuPosition] = useState({ top: 0, left: 0 });
   const [floatingMenuUser, setFloatingMenuUser] = useState(null);
-  const [showLeaveModal, setShowLeaveModal] = useState(false);
 
   const playerRef = useRef(null);
   const videoWrapperRef = useRef(null);
@@ -46,6 +45,7 @@ function App() {
   const latestRoomStateRef = useRef(null);
   const toastTimeoutRef = useRef(null);
   const isLocallyPausedRef = useRef(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
 
   useEffect(() => {
     isLocallyPausedRef.current = isLocallyPaused;
@@ -110,14 +110,6 @@ function App() {
     setFloatingMenuUser(null);
   };
 
-  const openLeaveModal = () => {
-    setShowLeaveModal(true);
-  };
-
-  const closeLeaveModal = () => {
-    setShowLeaveModal(false);
-  };
-
   const toggleFullscreen = async () => {
     const el = videoWrapperRef.current;
     if (!el) return;
@@ -161,37 +153,6 @@ function App() {
     pendingRoomStateRef.current = null;
     latestRoomStateRef.current = null;
     setPlayerInstanceKey(0);
-  };
-
-  const confirmLeaveRoom = async () => {
-    try {
-      const fullscreenElement =
-        document.fullscreenElement || document.webkitFullscreenElement || null;
-
-      if (fullscreenElement) {
-        if (document.exitFullscreen) {
-          await document.exitFullscreen();
-        } else if (document.webkitExitFullscreen) {
-          await document.webkitExitFullscreen();
-        }
-      }
-    } catch (error) {
-      console.log("Exit fullscreen error:", error);
-    }
-
-    if (socket.connected && roomId) {
-      socket.emit("leave_room");
-    }
-
-    closeLeaveModal();
-    resetRoomState();
-    setJoined(false);
-    setMode("");
-    setRoomName("");
-    setRoomId("");
-    setInviteCode("");
-
-    showToast("You left the room", "info");
   };
 
   const openFloatingUserMenu = (event, menuKey, user) => {
@@ -376,21 +337,23 @@ function App() {
     try {
       const now = Date.now();
       const networkDelay = state.sentAt ? (now - state.sentAt) / 1000 : 0;
-      const cappedDelay = Math.min(networkDelay, 0.7);
       const baseTime = Number(state.currentTime) || 0;
-      const targetTime = state.isPlaying ? baseTime + cappedDelay : baseTime;
+      const targetTime = state.isPlaying ? baseTime + networkDelay : baseTime;
 
-      let shouldPlay = !!state.isPlaying;
-      if (!forceSync && isLocallyPausedRef.current) {
-        shouldPlay = false;
-      }
+      const shouldPlay = forceSync
+        ? !!state.isPlaying
+        : isLocallyPausedRef.current
+        ? false
+        : !!state.isPlaying;
 
       const current = playerRef.current.getCurrentTime?.() || 0;
       const diff = Math.abs(current - targetTime);
 
       isRemoteActionRef.current = true;
 
-      if (forceSync || diff > 1.5) {
+      if (forceSync || diff > 1.2) {
+        playerRef.current.seekTo?.(targetTime, true);
+      } else if (diff > 0.35) {
         playerRef.current.seekTo?.(targetTime, true);
       }
 
@@ -401,10 +364,10 @@ function App() {
           const after = playerRef.current?.getCurrentTime?.() || 0;
           const diffAfter = Math.abs(after - targetTime);
 
-          if (diffAfter > 0.9) {
+          if (diffAfter > 0.6) {
             playerRef.current?.seekTo?.(targetTime, true);
           }
-        }, 700);
+        }, 450);
       } else {
         playerRef.current.pauseVideo?.();
       }
@@ -512,7 +475,7 @@ function App() {
       if (!videoId) return;
 
       const now = Date.now();
-      if (now - lastSyncSentAtRef.current < 4000) return;
+      if (now - lastSyncSentAtRef.current < 2000) return;
 
       lastSyncSentAtRef.current = now;
 
@@ -525,7 +488,7 @@ function App() {
         currentTime,
         isPlaying,
       });
-    }, 4000);
+    }, 2000);
 
     return () => clearInterval(syncInterval);
   }, [joined, isCurrentUserHost, videoId, roomId]);
@@ -538,7 +501,6 @@ function App() {
     const closeMenuOnEscape = (e) => {
       if (e.key === "Escape") {
         closeUserMenu();
-        setShowLeaveModal(false);
       }
     };
 
@@ -688,7 +650,7 @@ function App() {
       socket.off("kicked_from_room", handleKicked);
       socket.off("room_error", handleRoomError);
     };
-  }, [videoId, username, isCurrentUserHost]);
+  }, [isCurrentUserHost, videoId, username]);
 
   useEffect(() => {
     return () => {
@@ -797,16 +759,6 @@ function App() {
         </div>
       ) : (
         <div className="room-layout">
-          <button
-            type="button"
-            className="leave-btn"
-            onClick={openLeaveModal}
-            title="Leave room"
-            aria-label="Leave room"
-          >
-            ⏻
-          </button>
-
           <aside className="left-sidebar panel">
             <div className="sidebar-top">
               <p className="sidebar-label">Room :</p>
@@ -1108,32 +1060,6 @@ function App() {
               </div>
             </div>
           </aside>
-
-          {showLeaveModal && (
-            <div className="modal-overlay" onClick={closeLeaveModal}>
-              <div className="leave-modal" onClick={(e) => e.stopPropagation()}>
-                <h3>Leave room?</h3>
-                <p>You will be disconnected from this watch session.</p>
-
-                <div className="modal-actions">
-                  <button
-                    type="button"
-                    className="modal-btn modal-btn-secondary"
-                    onClick={closeLeaveModal}
-                  >
-                    No
-                  </button>
-                  <button
-                    type="button"
-                    className="modal-btn modal-btn-danger"
-                    onClick={confirmLeaveRoom}
-                  >
-                    Yes
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>

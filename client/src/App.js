@@ -379,60 +379,63 @@ const confirmLeaveRoom = async () => {
   };
 
   const applyRoomState = (state, options = {}) => {
+  try {
     if (!state || !state.videoId) return;
 
     const forceSync = !!options.forceSync;
 
-    if (!playerRef.current || !isPlayerReadyRef.current) {
+    if (
+      !playerRef.current ||
+      !isPlayerReadyRef.current ||
+      typeof playerRef.current?.getCurrentTime !== "function" ||
+      typeof playerRef.current?.seekTo !== "function"
+    ) {
       pendingRoomStateRef.current = { ...state, __forceSync: forceSync };
       return;
     }
 
+    // 🔥 EXTRA SAFETY (THIS WAS MISSING)
+    let current = 0;
     try {
-      const now = Date.now();
-      const networkDelay = state.sentAt ? (now - state.sentAt) / 1000 : 0;
-      const baseTime = Number(state.currentTime) || 0;
-      const targetTime = state.isPlaying ? baseTime + networkDelay : baseTime;
-
-      const shouldPlay = forceSync
-        ? !!state.isPlaying
-        : isLocallyPausedRef.current
-        ? false
-        : !!state.isPlaying;
-
-      const current = playerRef.current.getCurrentTime?.() || 0;
-      const diff = Math.abs(current - targetTime);
-
-      isRemoteActionRef.current = true;
-
-      if (forceSync || diff > 1.2) {
-        playerRef.current.seekTo?.(targetTime, true);
-      } else if (diff > 0.35) {
-        playerRef.current.seekTo?.(targetTime, true);
-      }
-
-      if (shouldPlay) {
-        playerRef.current.playVideo?.();
-
-        setTimeout(() => {
-          const after = playerRef.current?.getCurrentTime?.() || 0;
-          const diffAfter = Math.abs(after - targetTime);
-
-          if (diffAfter > 0.6) {
-            playerRef.current?.seekTo?.(targetTime, true);
-          }
-        }, 450);
-      } else {
-        playerRef.current.pauseVideo?.();
-      }
-
-      setTimeout(() => {
-        isRemoteActionRef.current = false;
-      }, 700);
-    } catch (error) {
-      console.log("applyRoomState error:", error);
+      current = playerRef.current.getCurrentTime();
+    } catch {
+      return;
     }
-  };
+
+    const now = Date.now();
+    const networkDelay = state.sentAt ? (now - state.sentAt) / 1000 : 0;
+    const baseTime = Number(state.currentTime) || 0;
+    const targetTime = state.isPlaying ? baseTime + networkDelay : baseTime;
+
+    const shouldPlay = forceSync
+      ? !!state.isPlaying
+      : isLocallyPausedRef.current
+      ? false
+      : !!state.isPlaying;
+
+    const diff = Math.abs(current - targetTime);
+
+    isRemoteActionRef.current = true;
+
+    try {
+      playerRef.current.seekTo(targetTime, true);
+    } catch {
+      return;
+    }
+
+    if (shouldPlay) {
+      playerRef.current.playVideo?.();
+    } else {
+      playerRef.current.pauseVideo?.();
+    }
+
+    setTimeout(() => {
+      isRemoteActionRef.current = false;
+    }, 500);
+  } catch (err) {
+    console.log("🔥 Sync crash prevented:", err);
+  }
+};
 
   const syncToHostNow = () => {
     const state = latestRoomStateRef.current;
@@ -452,6 +455,7 @@ const confirmLeaveRoom = async () => {
   };
 
   const onPlayerReady = (event) => {
+    if (!event || !event.target) return;
     playerRef.current = event.target;
     isPlayerReadyRef.current = true;
     setIsVideoLoading(false);
@@ -523,9 +527,8 @@ const confirmLeaveRoom = async () => {
 
   useEffect(() => {
     const syncInterval = setInterval(() => {
-      if (!joined) return;
+      if (!joined || !playerRef.current || !isPlayerReadyRef.current) return;
       if (!isCurrentUserHost) return;
-      if (!playerRef.current) return;
       if (!videoId) return;
 
       const now = Date.now();
@@ -615,7 +618,9 @@ const confirmLeaveRoom = async () => {
         return;
       }
 
-      applyRoomState(state);
+      setTimeout(() => {
+  applyRoomState(state);
+}, 100);
     };
 
     const handleRoomCreated = (data) => {
@@ -1038,6 +1043,7 @@ const confirmLeaveRoom = async () => {
                             rel: 0,
                             fs: isCurrentUserHost ? 1 : 0,
                             iv_load_policy: 3,
+                               playsinline: 1
                           },
                         }}
                       />

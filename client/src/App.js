@@ -4,11 +4,14 @@ import io from "socket.io-client";
 import YouTube from "react-youtube";
 import "./App.css";
 
-const socket = io("http://localhost:5000", {
-  transports: ["websocket", "polling"],
-  reconnection: true,
-});
-
+const socket = io(
+  process.env.REACT_APP_BACKEND_URL || "http://localhost:5000",
+  {
+    transports: ["websocket", "polling"],
+    reconnection: true,
+  }
+);
+console.log("Backend URL:", process.env.REACT_APP_BACKEND_URL);
 function App() {
   const [username, setUsername] = useState("");
   const [joined, setJoined] = useState(false);
@@ -746,7 +749,7 @@ setTimeout(() => {
 
             {!isSocketConnected && (
               <p className="inline-status inline-status-error">
-                Backend not connected
+              Backend waking up... please wait
               </p>
             )}
 

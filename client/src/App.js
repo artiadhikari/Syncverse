@@ -414,24 +414,29 @@ const confirmLeaveRoom = async () => {
       : !!state.isPlaying;
 
     const diff = Math.abs(current - targetTime);
+    const seekThreshold = state.isPlaying ? 1 : 0.35;
 
-    isRemoteActionRef.current = true;
+   isRemoteActionRef.current = true;
 
-    try {
-      playerRef.current.seekTo(targetTime, true);
-    } catch {
-      return;
-    }
+try {
+  if (diff > seekThreshold) {
+    playerRef.current.seekTo(targetTime, true);
+  }
+} catch {
+  return;
+}
 
-    if (shouldPlay) {
-      playerRef.current.playVideo?.();
-    } else {
-      playerRef.current.pauseVideo?.();
-    }
+const playerState = playerRef.current.getPlayerState?.();
 
-    setTimeout(() => {
-      isRemoteActionRef.current = false;
-    }, 500);
+if (shouldPlay && playerState !== 1) {
+  playerRef.current.playVideo?.();
+} else if (!shouldPlay && playerState !== 2) {
+  playerRef.current.pauseVideo?.();
+}
+
+setTimeout(() => {
+  isRemoteActionRef.current = false;
+}, 500);
   } catch (err) {
     console.log("🔥 Sync crash prevented:", err);
   }
@@ -506,15 +511,15 @@ const confirmLeaveRoom = async () => {
 
     const currentTime = playerRef.current.getCurrentTime?.() || 0;
 
-    if (!isCurrentUserHost) {
-      if (event?.data === 3) {
-        const state = latestRoomStateRef.current;
-        if (state) {
-          applyRoomState(state, { forceSync: true });
-        }
-      }
-      return;
+  if (!isCurrentUserHost) {
+  if (event?.data === 3 && !isLocallyPausedRef.current) {
+    const state = latestRoomStateRef.current;
+    if (state) {
+      applyRoomState(state); 
     }
+  }
+  return;
+}
 
     if (event?.data === 3) {
       socket.emit("seek_video", { roomId, currentTime });
@@ -532,7 +537,7 @@ const confirmLeaveRoom = async () => {
       if (!videoId) return;
 
       const now = Date.now();
-      if (now - lastSyncSentAtRef.current < 2000) return;
+      if (now - lastSyncSentAtRef.current < 4000) return;
 
       lastSyncSentAtRef.current = now;
 
@@ -618,10 +623,12 @@ const confirmLeaveRoom = async () => {
         return;
       }
 
-      setTimeout(() => {
-  applyRoomState(state);
-}, 100);
-    };
+  if (!isLocallyPausedRef.current) {
+  setTimeout(() => {
+    applyRoomState(state);
+  }, 100);
+}
+};
 
     const handleRoomCreated = (data) => {
       setJoined(true);

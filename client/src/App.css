@@ -1052,7 +1052,7 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(5, 5, 5, 0.72);
+  background: rgba(5, 5, 5, 0.45);
   backdrop-filter: blur(6px);
   border-radius: 22px;
 }

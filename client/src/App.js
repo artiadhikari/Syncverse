@@ -5,7 +5,7 @@ import YouTube from "react-youtube";
 import "./App.css";
 
 const socket = io(
-  process.env.REACT_APP_BACKEND_URL || "http://localhost:5000",
+   "http://localhost:5000",
   {
     transports: ["websocket", "polling"],
     reconnection: true,

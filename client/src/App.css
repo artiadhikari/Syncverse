@@ -1316,7 +1316,7 @@ button:disabled {
     min-width: 0;
   }
 }
-/* 🔴 Leave Button (Match Load/Sync/Pause Buttons) */
+/*  Leave Button (Match Load/Sync/Pause Buttons) */
 .leave-btn {
   position: absolute;
   top: 18px;

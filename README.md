@@ -4,12 +4,6 @@ SyncVerse is a real-time collaborative video watching platform that enables mult
 
 ---
 
-## Live Demo
-
-Frontend: https://syncverse-peach.vercel.app
-Backend: https://syncverse-production.up.railway.app
-
----
 
 ## Overview
 

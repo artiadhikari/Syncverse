@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: syncverse-backend
+    env: node
+    branch: main
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    workingDirectory: server
+    autoDeploy: true
+    envVars:
+      - key: MONGO_URI
+        value: ""
+      - key: CLIENT_URL
+        value: ""

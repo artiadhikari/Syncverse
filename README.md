@@ -42,18 +42,35 @@ SyncVerse addresses the challenge of asynchronous media consumption in shared en
 ### Deployment
 
 * Vercel (Frontend)
-* Railway (Backend)
+* Render (Backend)
 
 ---
 
-## Architecture
+## Deployment Instructions
 
-The application follows a client-server architecture:
+### Backend on Render
 
-* The frontend communicates with the backend using HTTP and WebSocket protocols
-* The backend manages room lifecycle, user sessions, and synchronization logic
-* Socket.IO enables real-time event broadcasting across connected clients
-* MongoDB is used for persistent storage of room and playback state
+1. Add `render.yaml` to the repo root. This repo already includes a `render.yaml` file for the backend service.
+2. In Render, connect the repository and choose branch `main`.
+3. Set the following Render environment variables:
+   * `MONGO_URI` = your MongoDB Atlas connection string
+   * `CLIENT_URL` = your Vercel frontend URL, for example `https://your-app.vercel.app`
+4. Render will use:
+   * Build command: `npm install`
+   * Start command: `npm start`
+   * Working directory: `server`
+
+If you deleted the previous Render deployment, simply re-create it from the repo or push the updated `render.yaml` file again.
+
+### Frontend on Vercel
+
+1. Create a new Vercel project from the repository.
+2. Set the root directory to `client`.
+3. Configure this Vercel environment variable:
+   * `REACT_APP_BACKEND_URL` = `https://<your-render-backend>.onrender.com`
+4. Use:
+   * Build command: `npm run build`
+   * Output directory: `build`
 
 ---
 
@@ -61,11 +78,13 @@ The application follows a client-server architecture:
 
 ### Frontend
 
-REACT_APP_BACKEND_URL=https://syncverse-production.up.railway.app
+`REACT_APP_BACKEND_URL=https://<your-render-backend>.onrender.com`
 
 ### Backend
 
-MONGO_URI=your_mongodb_connection_string
+`MONGO_URI=your_mongodb_connection_string`
+
+`CLIENT_URL=https://<your-vercel-frontend>.vercel.app`
 
 ---
 
@@ -105,6 +124,7 @@ npm start
 ---
 
 ## Future Enhancements
+
 * Support for additional media platforms
 * Improved reconnection and error handling strategies
 * Enhanced user interface and interaction feedback

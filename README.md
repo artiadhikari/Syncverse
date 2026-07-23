@@ -4,6 +4,13 @@ SyncVerse is a real-time collaborative video watching platform that enables mult
 
 ---
 
+## Live Demo
+
+Frontend: https://syncverse-gamma.vercel.app
+Backend: https://syncverse-2.onrender.com
+
+---
+
 
 ## Overview
 
@@ -67,7 +74,7 @@ If you deleted the previous Render deployment, simply re-create it from the repo
 1. Create a new Vercel project from the repository.
 2. Set the root directory to `client`.
 3. Configure this Vercel environment variable:
-   * `REACT_APP_BACKEND_URL` = `https://<your-render-backend>.onrender.com`
+   * `REACT_APP_BACKEND_URL` = `https://syncverse-2.onrender.com`
 4. Use:
    * Build command: `npm run build`
    * Output directory: `build`
@@ -78,13 +85,13 @@ If you deleted the previous Render deployment, simply re-create it from the repo
 
 ### Frontend
 
-`REACT_APP_BACKEND_URL=https://<your-render-backend>.onrender.com`
+`REACT_APP_BACKEND_URL=https://syncverse-2.onrender.com`
 
 ### Backend
 
 `MONGO_URI=your_mongodb_connection_string`
 
-`CLIENT_URL=https://<your-vercel-frontend>.vercel.app`
+`CLIENT_URL=https://syncverse-gamma.vercel.app`
 
 ---
 
